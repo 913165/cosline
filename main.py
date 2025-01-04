@@ -3,7 +3,8 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pathlib import Path
-from app.controllers.api_controller import router
+from app.controllers.api_controller import router as vector_store_router
+from app.controllers.payload_controller import router as payload_router
 
 # Define root directories
 ROOT_DIR = Path(__file__).parent
@@ -28,7 +29,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Include the router
-app.include_router(router)
+app.include_router(vector_store_router)
+app.include_router(payload_router)
 
 @app.get("/")
 async def root():
