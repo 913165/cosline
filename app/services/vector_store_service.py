@@ -3,6 +3,7 @@ from app.models import Distance, VectorStore
 from typing import Dict, Any
 from pathlib import Path
 import os
+import shutil
 
 # Define root directories
 ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).parent
@@ -66,4 +67,19 @@ class VectorStoreService:
                 config_data = json.load(config_file)
                 return config_data
         return None
+
+    def delete_collection(self, store_name: str):
+        """Delete a collection by name."""
+        collection_dir = COLLECTIONS_DIR / store_name
+        if collection_dir.exists():
+            shutil.rmtree(collection_dir)
+            print(f"Collection directory {collection_dir} deleted.")
+        config_dir = CONFIG_DIR / store_name
+        if config_dir.exists():
+            shutil.rmtree(config_dir)
+            print(f"Config directory {config_dir} deleted.")
+            return True
+
+        print(f"Collection {store_name} not found.")
+        return False
 

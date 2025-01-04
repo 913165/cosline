@@ -134,3 +134,32 @@ async def get_collection(
             status_code=500,
             detail=f"Error retrieving collection: {str(e)}"
         )
+
+@router.delete("/{store_name}")
+async def delete_collection(
+    store_name: str,
+    vector_store_service: VectorStoreService = Depends(get_vector_store_service)
+):
+    """
+    Endpoint to delete a vector store collection by name.
+
+    Args:
+        store_name: The name of the vector store collection
+        vector_store_service: Injected service for vector store operations
+
+    Returns:
+        dict: A message indicating success or failure
+
+    Raises:
+        HTTPException: If the collection does not exist or other errors occur
+    """
+    try:
+        vector_store_service.delete_collection(store_name)
+        return {
+            "message": f"Collection {store_name} deleted successfully"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting collection: {str(e)}"
+        )
