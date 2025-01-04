@@ -1,9 +1,14 @@
 # app/controllers/payload_controller.py
-from fastapi import APIRouter, HTTPException
-from app.models import Payload
+from importlib.metadata import pass_none
+from typing import List, Dict, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+from app.models import Payload,FilterCriteria
+from app.models.filter import convert_to_filter_criteria
 from app.services.payload_service import PayloadService
 from fastapi import Depends
 import logging
+from app.utils.filters import filter_payload
 
 router = APIRouter(
     prefix="/api/v1/collections",
@@ -52,3 +57,17 @@ async def add_payload(
             status_code=500,
             detail=f"Error processing payload: {str(e)}"
         )
+
+#
+@router.get("/{vector_name}/payloads")
+async def get_all_payloads(
+        vector_name: str,
+        payload_service: PayloadService = Depends(get_payload_service)
+):
+    # Get points from vector store
+    points = payload_service.read_vector_store(vector_name)
+    return points
+
+
+
+

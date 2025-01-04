@@ -66,3 +66,4 @@ class VectorStoreService:
                 config_data = json.load(config_file)
                 return config_data
         return None
+
