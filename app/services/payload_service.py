@@ -5,9 +5,10 @@ import json
 import logging
 from pathlib import Path
 import os
-from typing import Optional
+from typing import Optional, List
 
 logger = logging.getLogger(__name__)
+
 
 ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).parent
 
@@ -67,6 +68,50 @@ class PayloadService:
             error_msg = f"Failed to add payload: {str(e)}"
             print("error occurred ",error_msg)
             raise RuntimeError(f"Failed to add payload to VectorStore: {str(e)}")
+
+    def add_payloads_to_vector_store(self, vector_name: str, payloads: List[Payload]) -> None:
+        """
+        Add multiple payloads to vector store as JSONL file.
+
+        Args:
+            vector_name: Name of the vector store
+            payloads: List of Payload objects to be added
+
+        Raises:
+            RuntimeError: If failed to add payloads
+        """
+        print(f"Adding {len(payloads)} payloads to VectorStore: {vector_name}")
+
+        try:
+            # Ensure collection exists
+            self.ensure_collection_exists(vector_name)
+
+            # Define vector file path
+            vector_path = self.collections_dir / vector_name / "vectors.jsonl"
+
+            # Open file once for all payloads
+            with open(vector_path, 'a', encoding='utf-8') as f:
+                for payload in payloads:
+                    # Convert Payload to dict for JSON serialization
+                    point_dict = {
+                        "id": str(payload.id),  # Convert UUID to string
+                        "content": payload.content,
+                        "vector": payload.embedding,
+                        "metadata": payload.metadata
+                    }
+
+                    # Write each payload as a JSON line
+                    json_line = json.dumps(point_dict) + "\n"
+                    f.write(json_line)
+
+            print(f"Successfully added {len(payloads)} payloads to VectorStore: {vector_name}")
+
+        except Exception as e:
+            error_msg = f"Failed to add payloads: {str(e)}"
+            print(f"Error occurred: {error_msg}")
+            raise RuntimeError(f"Failed to add payloads to VectorStore: {str(e)}")
+
+        return None
 
     def read_vector_store(self, vector_name: str) -> list[Point]:
         """

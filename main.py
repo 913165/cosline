@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from app.controllers.api_controller import router as vector_store_router
 from app.controllers.payload_controller import router as payload_router
+from app.controllers.search_controller import router as search_router
 
 # Define root directories
 ROOT_DIR = Path(__file__).parent
@@ -31,6 +32,7 @@ app = FastAPI(lifespan=lifespan)
 # Include the router
 app.include_router(vector_store_router)
 app.include_router(payload_router)
+app.include_router(search_router)
 
 @app.get("/")
 async def root():

@@ -14,7 +14,7 @@ router = APIRouter(
     prefix="/api/v1/collections",
     tags=["payloads"]
 )
-
+logging.basicConfig(level = logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +43,8 @@ async def add_payload(
     Raises:
         HTTPException: If vector store not found or other errors occur
     """
-    print('payload : ', payload)
+
+    logger.info(f"controller : Adding payload to VectorStore: {vector_name}")
 
 
     try:
@@ -56,6 +57,30 @@ async def add_payload(
         raise HTTPException(
             status_code=500,
             detail=f"Error processing payload: {str(e)}"
+        )
+
+
+@router.post("/{vector_name}/payloads/batch")
+async def add_payloads(
+        vector_name: str,
+        payloads: List[Payload],
+        payload_service: PayloadService = Depends(get_payload_service)
+):
+    """Add multiple payloads to a vector store."""
+    logger.info(f"Received batch of {len(payloads)} payloads for vector store: {vector_name}")
+
+    try:
+        payload_service.add_payloads_to_vector_store(vector_name, payloads)
+        return {
+            "message": f"Successfully added {len(payloads)} payloads to {vector_name}",
+            "count": len(payloads)
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing payloads: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing payloads: {str(e)}"
         )
 
 #
