@@ -5,7 +5,8 @@ from typing import List, Dict, Optional
 from fastapi import APIRouter, HTTPException, Query
 from app.models import Payload,FilterCriteria
 from app.models.filter import convert_to_filter_criteria
-from app.services.payload_service import PayloadService
+from app.services.payload_service import PayloadServiceFile
+from app.services.payload_service_db import PayloadService
 from fastapi import Depends
 import logging
 from app.utils.filters import filter_payload

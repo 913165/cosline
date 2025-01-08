@@ -14,7 +14,7 @@ ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).par
 
 COLLECTIONS_DIR = ROOT_DIR / "collections"
 CONFIG_DIR = ROOT_DIR / "config"
-class PayloadService:
+class PayloadServiceFile:
     def __init__(self):
         self.collections_dir = COLLECTIONS_DIR
 
