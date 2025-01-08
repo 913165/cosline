@@ -11,7 +11,7 @@ ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).par
 COLLECTIONS_DIR = ROOT_DIR / "collections"
 CONFIG_DIR = ROOT_DIR / "config"
 
-class VectorStoreService:
+class VectorStoreServiceFile:
     def __init__(self):
         self.collections: Dict[str, VectorStore] = {}
 

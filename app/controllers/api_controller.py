@@ -3,7 +3,8 @@ from fastapi import APIRouter, Header, HTTPException, Depends
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from app.models import Distance
-from app.services.vector_store_service import VectorStoreService
+from app.services.vector_store_service import VectorStoreServiceFile
+from app.services.SQLiteVectorStoreService import VectorStoreService
 
 router = APIRouter(
     prefix="/api/v1/collections",
