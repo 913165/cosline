@@ -5,7 +5,7 @@ from uuid import UUID
 class Point(BaseModel):
     id: UUID
     content: str
-    vector: List[float]
+    embedding: List[float]
     metadata: Optional[Dict[str, Any]] = None
 
     class Config:

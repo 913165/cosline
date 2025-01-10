@@ -5,7 +5,11 @@ import json
 import logging
 from app.models import Payload, Point
 
+
+
 logger = logging.getLogger(__name__)
+
+
 
 class PayloadService:
     def __init__(self, db_path: str = "vector_stores.db"):
@@ -122,7 +126,7 @@ class PayloadService:
                     point = Point(
                         id=row[0],
                         content=row[1],
-                        vector=vector,
+                        embedding=vector,
                         metadata=metadata
                     )
                     points.append(point)
@@ -134,17 +138,44 @@ class PayloadService:
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-    def delete_vector_store(self, vector_name: str) -> bool:
-        """Delete all vectors for a given vector store."""
+    def delete_vector_store(self, vector_name: str, conn=None) -> bool:
+        """
+        Delete all vectors for a given vector store from database.
+
+        Args:
+            vector_name: Name of the vector store
+            conn: Optional database connection for transaction coordination
+
+        Returns:
+            bool: True if deletion was successful
+        """
+        logger.info(f"Deleting vector store {vector_name} from database")
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
+            # Use provided connection or create new one
+            should_close = conn is None
+            if conn is None:
+                conn = sqlite3.connect(self.db_path)
+
+            cursor = conn.cursor()
+
+            try:
+                # Delete from vectors table
                 cursor.execute("DELETE FROM vectors WHERE vector_store_name = ?", (vector_name,))
                 deleted = cursor.rowcount > 0
-                conn.commit()
-                return deleted
+
+                if not conn.in_transaction:
+                    conn.commit()
+
+                logger.info(
+                    f"Vector store {vector_name} deleted from database {'successfully' if deleted else 'but no vectors found'}")
+                return True
+
+            finally:
+                if should_close:
+                    conn.close()
+
         except sqlite3.Error as e:
-            logger.error(f"Error deleting vector store {vector_name}: {e}")
+            logger.error(f"Error deleting vector store {vector_name} from database: {e}")
             return False
 
     def get_vector_count(self, vector_name: str) -> int:
