@@ -5,11 +5,7 @@ import json
 import logging
 from app.models import Payload, Point
 
-
-
 logger = logging.getLogger(__name__)
-
-
 
 class PayloadService:
     def __init__(self, db_path: str = "vector_stores.db"):
