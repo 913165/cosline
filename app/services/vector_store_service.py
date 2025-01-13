@@ -1,85 +1,84 @@
-import json
+# app/services/vector_store_service.py
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Any
 from app.models import Distance, VectorStore
-from typing import Dict, Any
-from pathlib import Path
-import os
-import shutil
+import sqlite3
 
-# Define root directories
-ROOT_DIR = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))).parent
 
-COLLECTIONS_DIR = ROOT_DIR / "collections"
-CONFIG_DIR = ROOT_DIR / "config"
+class IVectorStoreService(ABC):
+    """Interface for vector store service implementations."""
 
-class VectorStoreServiceFile:
-    def __init__(self):
-        self.collections: Dict[str, VectorStore] = {}
+    @abstractmethod
+    def add_vector_store(self, name: str, size: int, distance: Distance) -> bool:
+        """
+        Create and add a new vector store to collections.
 
-    def add_vector_store(self, name: str, size: int, distance: Distance):
-        """Create and add a new vector store to collections."""
-        print(f"Adding vector store {name} with size {size} and distance {distance}")
-        vector_store = VectorStore(
-            size=size,
-            distance_type=distance
-        )
+        Args:
+            name: Name of the vector store
+            size: Size of vectors
+            distance: Distance metric type
 
-        (COLLECTIONS_DIR / name).mkdir(parents=True, exist_ok=True)
-        print(f"Collections directory ensured at: {COLLECTIONS_DIR / name}")
+        Returns:
+            bool: True if successful
 
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        (CONFIG_DIR / name).mkdir(parents=True, exist_ok=True)
-        print(f"Config directory ensured at: {CONFIG_DIR / name}")
+        Raises:
+            ValueError: If name exists or parameters invalid
+        """
+        pass
 
-        # Create config data
-        config_data = {
-            "collectionName": name,
-            "size": size,
-            "distance": distance.name,
-            "persist": True  # Assuming persist is always true for this example
-        }
+    @abstractmethod
+    def get_all_collections(self) -> List[Dict[str, Any]]:
+        """
+        Get all collections from storage.
 
-        # Write config data to JSON file
-        config_file_path = CONFIG_DIR / name / "config.json"
-        with open(config_file_path, "w") as config_file:
-            json.dump(config_data, config_file, indent=4)
-        print(f"Config file created at: {config_file_path}")
+        Returns:
+            List of collection configurations
+        """
+        pass
 
-        self.collections[name] = vector_store
+    @abstractmethod
+    def get_collection(self, name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a collection by name.
 
-    def get_all_collections(self):
-        """Get all collections inside the config directory."""
-        collections = []
-        for collection_dir in CONFIG_DIR.iterdir():
-            if collection_dir.is_dir():
-                config_file_path = collection_dir / "config.json"
-                if config_file_path.exists():
-                    with open(config_file_path, "r") as config_file:
-                        config_data = json.load(config_file)
-                        collections.append(config_data)
-        return collections
+        Args:
+            name: Name of collection
 
-    def get_collection(self, name: str):
-        """Get a collection by name."""
-        collection_dir = CONFIG_DIR / name
-        config_file_path = collection_dir / "config.json"
-        if config_file_path.exists():
-            with open(config_file_path, "r") as config_file:
-                config_data = json.load(config_file)
-                return config_data
-        return None
+        Returns:
+            Collection configuration or None if not found
+        """
+        pass
 
-    def delete_collection(self, store_name: str):
-        """Delete a collection by name."""
-        collection_dir = COLLECTIONS_DIR / store_name
-        if collection_dir.exists():
-            shutil.rmtree(collection_dir)
-            print(f"Collection directory {collection_dir} deleted.")
-        config_dir = CONFIG_DIR / store_name
-        if config_dir.exists():
-            shutil.rmtree(config_dir)
-            print(f"Config directory {config_dir} deleted.")
-            return True
+    @abstractmethod
+    def delete_collection(self, store_name: str, conn: Optional[Any] = None) -> bool:
+        """
+        Delete a collection and its associated data.
 
-        print(f"Collection {store_name} not found.")
-        return False
+        Args:
+            store_name: Name of collection to delete
+            conn: Optional connection for transaction coordination
 
+        Returns:
+            True if successful
+        """
+        pass
+
+    @abstractmethod
+    def update_collection(
+            self,
+            name: str,
+            size: Optional[int] = None,
+            distance: Optional[Distance] = None
+    ) -> bool:
+        """
+        Update an existing collection's configuration.
+
+        Args:
+            name: Collection name
+            size: Optional new size
+            distance: Optional new distance metric
+
+        Returns:
+            True if successful
+        """
+        pass
