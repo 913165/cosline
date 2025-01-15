@@ -3,7 +3,7 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from pathlib import Path
-from app.controllers.api_controller import router as vector_store_router
+from app.controllers.vector_store_controller import router as vector_store_router
 from app.controllers.payload_controller import router as payload_router
 from app.controllers.search_controller import router as search_router
 

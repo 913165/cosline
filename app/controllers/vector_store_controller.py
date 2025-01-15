@@ -10,6 +10,17 @@ router = APIRouter(
     tags=["vector-stores"]
 )
 
+class HNSWConfigRequest(BaseModel):
+    M: int = 16
+    ef_construction: int = 200
+    ef_search: int = 50
+    num_threads: int = 4
+
+class VectorStoreCreateRequest(BaseModel):
+    size: int
+    distance: str
+    persist: Optional[str] = None
+    hnsw_config: Optional[HNSWConfigRequest] = None
 
 class VectorStoreCreateRequest(BaseModel):
     size: int

@@ -86,9 +86,6 @@ async def add_payloads(
 
     Returns:
         dict: Success message with count
-
-    Raises:
-        HTTPException: If error occurs while adding payloads
     """
     logger.info(f"Received batch of {len(payloads)} payloads for vector store: {vector_name}")
 
@@ -99,7 +96,7 @@ async def add_payloads(
         payload_service.add_payloads_to_vector_store(vector_name, payloads)
         return {
             "message": f"Successfully added {len(payloads)} payloads to {vector_name}",
-            "count": len(payloads)
+            "count": str(len(payloads))  # Convert count to string
         }
 
     except ValueError as e:

@@ -48,7 +48,8 @@ class SQLiteVectorStoreService(IVectorStoreService):
 
             vector_store = VectorStore(
                 size=size,
-                distance_type=distance
+                distance_type=distance,
+                points=[]  # Initialize with empty list
             )
 
             config_data = {

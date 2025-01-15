@@ -1,26 +1,24 @@
 # app/services/sqlite_search_service.py
+import faiss
 import numpy as np
-import sqlite3
 import json
+import sqlite3
 import logging
-from pathlib import Path
-import os
 from typing import List, Dict, Any
+
 from app.models import Point, Distance
-from .search_service import ISearchService, SearchResult
+from app.services import ISearchService
 
 logger = logging.getLogger(__name__)
 
 
 class SQLiteSearchService(ISearchService):
-    """SQLite implementation of the SearchService interface."""
-
     def __init__(self, db_path: str = "vector_stores.db"):
         self.db_path = db_path
         self._initialize_db()
+        self.index_cache = {}
 
     def _initialize_db(self):
-        """Initialize SQLite database with required tables."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -47,19 +45,35 @@ class SQLiteSearchService(ISearchService):
             point_vector: List[float],
             distance_type: Distance = Distance.Cosine
     ) -> float:
-        query = np.array(query_vector)
-        vector = np.array(point_vector)
+        query = np.array(query_vector).astype('float32')
+        vector = np.array(point_vector).astype('float32')
 
         if distance_type == Distance.Cosine:
-            return np.dot(query, vector) / (np.linalg.norm(query) * np.linalg.norm(vector))
+            # Normalize vectors for cosine similarity
+            query = query / np.linalg.norm(query)
+            vector = vector / np.linalg.norm(vector)
+            return np.dot(query, vector)
         elif distance_type == Distance.Euclidean:
-            return -np.linalg.norm(query - vector)  # Negative because smaller distance = more similar
+            return -np.linalg.norm(query - vector)
         elif distance_type == Distance.Dot:
             return np.dot(query, vector)
         elif distance_type == Distance.Manhattan:
-            return -np.sum(np.abs(query - vector))  # Negative because smaller distance = more similar
+            return -np.sum(np.abs(query - vector))
         else:
             raise ValueError(f"Unsupported distance type: {distance_type}")
+
+    async def _get_vector_store_config(self, vector_name: str) -> Dict[str, Any]:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT config FROM collections WHERE name = ?", (vector_name,))
+                row = cursor.fetchone()
+                if row:
+                    return json.loads(row[0])
+                raise FileNotFoundError(f"Vector store not found: {vector_name}")
+        except sqlite3.Error as e:
+            logger.error(f"Database error: {e}")
+            raise
 
     async def load_points(self, vector_name: str) -> List[Point]:
         try:
@@ -78,7 +92,7 @@ class SQLiteSearchService(ISearchService):
                     point = Point(
                         id=row[0],
                         content=row[1],
-                        vector=vector,
+                        embedding=vector,
                         metadata=metadata
                     )
                     points.append(point)
@@ -92,6 +106,60 @@ class SQLiteSearchService(ISearchService):
             logger.error(f"Database error while loading points: {e}")
             raise RuntimeError(f"Failed to load points from database: {e}")
 
+    async def _build_index(self, vector_name: str, points: List[Point], config: Dict):
+        if not points:
+            return
+
+        # Get dimension from first vector
+        dim = len(points[0].embedding)
+
+        # Get distance type from config
+        distance_type = config.get('distance', 'Cosine')
+
+        # Select appropriate FAISS metric based on distance type
+        if distance_type == 'Cosine':
+            metric = faiss.METRIC_INNER_PRODUCT
+        elif distance_type in ['Euclidean', 'Manhattan']:
+            metric = faiss.METRIC_L2
+        else:
+            metric = faiss.METRIC_INNER_PRODUCT  # Default to inner product for Dot product
+
+        # Get HNSW parameters from config
+        hnsw_config = config.get('hnsw_config', {})
+        M = hnsw_config.get('M', 16)
+        ef_construction = hnsw_config.get('ef_construction', 200)
+        ef_search = hnsw_config.get('ef_search', 50)
+
+        # Create and configure FAISS index
+        index = faiss.IndexHNSWFlat(dim, M, metric)
+        index.hnsw.efConstruction = ef_construction
+        index.hnsw.efSearch = ef_search
+
+        # Prepare vectors
+        vectors = np.array([point.embedding for point in points]).astype('float32')
+
+        # Normalize vectors for cosine similarity
+        if distance_type == 'Cosine':
+            faiss.normalize_L2(vectors)
+
+        # Train and add vectors
+        try:
+            index.train(vectors)
+        except Exception as e:
+            logger.warning(f"Training failed, but continuing as some FAISS indices don't require training: {e}")
+
+        index.add(vectors)
+
+        # Cache index and point mapping
+        self.index_cache[vector_name] = {
+            'index': index,
+            'points': points,
+            'id_mapping': {i: point for i, point in enumerate(points)},
+            'distance_type': distance_type
+        }
+
+        logger.info(f"Built FAISS HNSW index for {vector_name} with {len(points)} vectors")
+
     async def search_vectors(
             self,
             vector_name: str,
@@ -100,29 +168,46 @@ class SQLiteSearchService(ISearchService):
             distance_type: Distance = Distance.Cosine
     ) -> List[Dict[str, Any]]:
         try:
-            # Load points from vector store
-            points = await self.load_points(vector_name)
+            # Load points if not in cache
+            if vector_name not in self.index_cache:
+                points = await self.load_points(vector_name)
+                config = await self._get_vector_store_config(vector_name)
+                await self._build_index(vector_name, points, config)
 
-            # Compute similarities
+            index_data = self.index_cache[vector_name]
+
+            # Prepare query vector
+            query = np.array([query_vector]).astype('float32')
+
+            # Normalize query if using cosine similarity
+            if index_data['distance_type'] == 'Cosine':
+                faiss.normalize_L2(query)
+
+            # Search
+            distances, indices = index_data['index'].search(query, min(top_k, len(index_data['points'])))
+
+            # Format results
             results = []
-            for point in points:
-                similarity = await self.compute_similarity(
-                    query_vector,
-                    point.vector,
-                    distance_type
-                )
+            for idx, dist in zip(indices[0], distances[0]):
+                if idx < 0:  # FAISS may return -1 for not enough results
+                    continue
+
+                point = index_data['id_mapping'][idx]
+
+                # Convert distance to similarity score based on distance type
+                if index_data['distance_type'] == 'Cosine':
+                    score = float((1 + dist) / 2)  # Convert cosine distance to similarity (0-1 range)
+                else:
+                    score = float(1 / (1 + dist))  # Convert euclidean/manhattan distance to similarity
+
                 results.append({
                     "id": str(point.id),
                     "content": point.content,
                     "metadata": point.metadata,
-                    "score": float(similarity)
+                    "score": score
                 })
 
-            # Sort by similarity score
-            results.sort(key=lambda x: x["score"], reverse=True)
-
-            # Return top k results
-            return results[:top_k]
+            return results
 
         except Exception as e:
             logger.error(f"Search error: {str(e)}")
@@ -139,7 +224,7 @@ class SQLiteSearchService(ISearchService):
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT id, content, embedding, metadata
+                    SELECT embedding
                     FROM vectors
                     WHERE vector_store_name = ? AND id = ?
                 """, (vector_name, point_id))
@@ -148,7 +233,7 @@ class SQLiteSearchService(ISearchService):
                 if not row:
                     raise ValueError(f"Point not found with ID: {point_id}")
 
-                vector = json.loads(row[2].decode())
+                vector = json.loads(row[0].decode())
 
                 # Use the found point's vector to search
                 return await self.search_vectors(
@@ -160,6 +245,3 @@ class SQLiteSearchService(ISearchService):
         except sqlite3.Error as e:
             logger.error(f"Database error in search_by_id: {e}")
             raise RuntimeError(f"Database error: {e}")
-        except Exception as e:
-            logger.error(f"Search by ID error: {str(e)}")
-            raise
